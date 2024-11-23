@@ -1,6 +1,7 @@
 const express = require('express');
 const sequelize = require('./db');
 const User = require('./models/User');
+const { body, validationResult } = require('express-validator');
 require('dotenv').config(); // Load environment variables from .env file
 
 const app = express();
@@ -34,19 +35,20 @@ app.get('/users', async (req, res) => {
 });
 
 // Create a new user
-app.post('/users', async (req, res) => {
+app.post('/users', [
+    body('name').notEmpty().withMessage('Name is required'),
+    body('email').isEmail().withMessage('Valid email is required'),
+    body('mobile_no').notEmpty().withMessage('Mobile number is required'),
+], async (req, res) => {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name, email, mobile_no, status } = req.body;
+
     try {
-        const { name, email, mobile_no, status } = req.body;
-
-        // Validate input
-        if (!name) {
-            return res.status(400).json({ message: 'Name is required' });
-        } else if (!email) {
-            return res.status(400).json({ message: 'Email is required' });
-        } else if (!mobile_no) {
-            return res.status(400).json({ message: 'Mobile number is required' });
-        }
-
         const existingUser = await User.findOne({ where: { email: email } });
 
         if (existingUser) {
@@ -63,16 +65,24 @@ app.post('/users', async (req, res) => {
 });
 
 // Update user by ID
-app.put('/users/:id', async (req, res) => {
+app.put('/users/:id', [
+    body('name').optional().notEmpty().withMessage('Name cannot be empty')
+        .isLength({ min: 2 }).withMessage('Name must be at least 2 characters long')
+        .isLength({ max: 50 }).withMessage('Name must be no longer than 50 characters')
+        .matches(/^[a-zA-Z\s]+$/).withMessage('Name must contain only letters and spaces'),
+    body('email').optional().isEmail().withMessage('Valid email is required'),
+    body('mobile_no').optional().notEmpty().withMessage('Mobile number cannot be empty')
+        .matches(/^[0-9]{10}$/).withMessage('Mobile number must be a valid 10-digit number'),
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { id } = req.params; // Get user ID from the URL
+    const { name, email, mobile_no, status } = req.body; // Get updated data from request body
+
     try {
-        const { id } = req.params; // Get user ID from the URL
-        const { name, email, mobile_no, status } = req.body; // Get updated data from request body
-
-        // Validate input
-        if (!name && !email && !mobile_no && status === undefined) {
-            return res.status(400).json({ message: 'At least one field is required to update' });
-        }
-
         // Find user by ID
         const user = await User.findByPk(id); // Find user by primary key (ID)
 
